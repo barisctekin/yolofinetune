@@ -30,6 +30,7 @@ app.post('/mask-plates', async (req, res) => {
                         reject(error);
                     } else {
                         console.log(`Processed ${file}`);
+                        console.log(stdout);
                         resolve(stdout);
                     }
                 });
