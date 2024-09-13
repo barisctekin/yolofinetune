@@ -1,21 +1,28 @@
-import torch
-from ultralytics import YOLO
-import cv2
 import os
-import numpy as np
 import time
+import cv2
+from ultralytics import YOLO
+from pathlib import Path
+
+
+current_dir = Path(__file__).resolve().parent
+image_dir = current_dir / 'images'
+output_dir = current_dir / 'output'
+
+
+output_dir.mkdir(exist_ok=True)
 
 LICENSE_PLATE_CLASS_ID = 0  
 
 def load_yolo_v8_model():
-    start_time = time.time()  # timing
-    model_path = 'C:\\Users\\maran\\Downloads\\yolofinetune\\yolo\\best.pt'
-    if not os.path.exists(model_path):
+    start_time = time.time()  
+    model_path = current_dir / 'yolo' / 'best.pt'
+    if not model_path.exists():
         print(f"Model file does not exist at {model_path}")
         return None
-    model = YOLO(model_path)
+    model = YOLO(str(model_path))  # Convert Path object to string
     print("YOLOv8 model loaded successfully")
-    end_time = time.time()  # End timing
+    end_time = time.time()  
     print(f"Model loading time: {end_time - start_time:.4f} seconds")  
     return model
 
@@ -27,7 +34,7 @@ def detect_license_plates_yolo_v8(image, model, confidence_threshold=0.2):
         cls = int(box.cls.item())  
         confidence = box.conf.item()  
         if cls == LICENSE_PLATE_CLASS_ID and confidence > confidence_threshold:
-            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())  # Convert the bounding box to integers
+            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())  # Convert the bounding box 
             detections.append(((x1, y1, x2 - x1, y2 - y1), confidence))
     end_time = time.time()  # End timing
     print(f"License plate detection time: {end_time - start_time:.4f} seconds") 
@@ -35,10 +42,10 @@ def detect_license_plates_yolo_v8(image, model, confidence_threshold=0.2):
 
 def add_watermark(image, text="sompo sigorta", opacity=0.5):
     start_time = time.time()  # Start timing
-    # Create a copy of the image to overlay the watermark 
+    # Create a copy of the image 
     overlay = image.copy()
 
-    # Set up the font, size, and color 
+    
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 2
     font_color = (255, 255, 255)  
@@ -48,14 +55,14 @@ def add_watermark(image, text="sompo sigorta", opacity=0.5):
     # Get the dimensions 
     image_height, image_width = image.shape[:2]
 
-    # Calculate the position for the watermark (center of the image)
+    # Calculate the position 
     text_x = (image_width - text_size[0]) // 2
     text_y = (image_height + text_size[1]) // 2
 
-    # Add the text to the overlay
+    
     cv2.putText(overlay, text, (text_x, text_y), font, font_scale, font_color, font_thickness, cv2.LINE_AA)
 
-    # Blend the overlay with the original image using the specified opacity
+    
     cv2.addWeighted(overlay, opacity, image, 1 - opacity, 0, image)
 
     end_time = time.time()  # End timing
@@ -66,23 +73,23 @@ def cover_license_plate_with_black(image_path, output_path, model, debug=False):
     start_time = time.time()  # timing
     image_load_start_time = time.time()
     
-   
-    image = cv2.imread(image_path)
+    # Load 
+    image = cv2.imread(str(image_path))
     if image is None:
         print(f"Error: Unable to load image at {image_path}")
         return
     image_load_end_time = time.time()
     print(f"Image loading time: {image_load_end_time - image_load_start_time:.4f} seconds")
 
-    
+    # Detect license plates 
     detections = detect_license_plates_yolo_v8(image, model)
 
     if not detections:
         print(f"No license plates detected in {image_path}.")
-        # Add watermark before saving the original image if no license plates are detected
+        # Add watermark before 
         image = add_watermark(image)
         save_start_time = time.time()
-        cv2.imwrite(output_path, image)
+        cv2.imwrite(str(output_path), image)
         save_end_time = time.time()
         print(f"Image save time: {save_end_time - save_start_time:.4f} seconds")
         return
@@ -91,13 +98,12 @@ def cover_license_plate_with_black(image_path, output_path, model, debug=False):
         for (box, confidence) in detections:
             x, y, w, h = box
             cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        debug_output_path = output_path.replace('.jpg', '_debug.jpg')
-        cv2.imwrite(debug_output_path, image)
+        # No saving of debug images
 
     for (box, confidence) in detections:
         x, y, w, h = box
         
-        # Cover the license plate with a black rectangle
+        # Cover the license plate with  black 
         cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 0), -1)
 
     # Add the watermark after covering the license plate
@@ -105,28 +111,27 @@ def cover_license_plate_with_black(image_path, output_path, model, debug=False):
 
     save_start_time = time.time()  # Timing image save
     # Save the final image
-    cv2.imwrite(output_path, image)
+    cv2.imwrite(str(output_path), image)
     save_end_time = time.time()
     print(f"Image save time: {save_end_time - save_start_time:.4f} seconds")
 
     end_time = time.time()  # End timing
     print(f"Total processing time for this image: {end_time - start_time:.4f} seconds")
 
+# Main function to process all images 
+def process_images_in_directory(image_dir, output_dir, model, debug=False):
+    if not output_dir.exists():
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    files = os.listdir(image_dir)
+
+    for file in files:
+        file_path = image_dir / file
+        output_file_path = output_dir / file
+        print(f"Processing {file_path}...")
+        cover_license_plate_with_black(file_path, output_file_path, model, debug)
+
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 3:
-        print("Usage: python yolo_license_plate.py <input_image_path> <output_image_path> [--debug]")
-    else:
-        input_image_path = sys.argv[1]
-        output_image_path = sys.argv[2]
-        debug = '--debug' in sys.argv
-
-        load_start_time = time.time()  
-        model = load_yolo_v8_model()
-        load_end_time = time.time()  
-        print(f"Total model load time: {load_end_time - load_start_time:.4f} seconds")
-
-        if os.path.isfile(input_image_path):
-            cover_license_plate_with_black(input_image_path, output_image_path, model, debug)
-        else:
-            print(f"Error: The input path {input_image_path} is not a valid file.")
+    model = load_yolo_v8_model()
+    if model:
+        process_images_in_directory(image_dir, output_dir, model, debug=True)
